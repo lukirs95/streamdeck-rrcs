@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>com.elgato.numberdisplay PI</title>
+    <link rel="stylesheet" href="sdpi.css" />
+    <script src="common.js"></script>
+  </head>
+
+  <body>
+    <div class="sdpi-wrapper">
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="rrcs-address">RRCS Address</div>
+        <input
+          class="sdpi-item-value"
+          name="rrcs-address"
+          type="text"
+          value=""
+          placeholder="127.0.0.1"
+          onchange="sendValueToPlugin(String(event.target.value), 'setAddress')"
+        />
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="rrcs-port">RRCS Port</div>
+        <input
+          class="sdpi-item-value"
+          name="rrcs-port"
+          type="number"
+          value="8193"
+          placeholder="8193"
+          onchange="sendValueToPlugin(Number(event.target.value), 'setPort')"
+        />
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="source-net">Source Net</div>
+        <input
+          class="sdpi-item-value"
+          name="source-net"
+          type="number"
+          value="1"
+          placeholder="1"
+          onchange="sendValueToPlugin(Number(event.target.value), 'setSourceNet')"
+        />
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="source-node">Source Node</div>
+        <input
+          class="sdpi-item-value"
+          name="source-node"
+          type="number"
+          value="3"
+          placeholder="3"
+          onchange="sendValueToPlugin(Number(event.target.value), 'setSourceNode')"
+        />
+      </div>
+      <div type="select" class="sdpi-item">
+        <div class="sdpi-item-label">Change Port Type</div>
+        <select
+          class="sdpi-item-value select setSourcePortTypeSelect"
+          onchange="sendValueToPlugin(String(event.target.value), 'setSourcePortType')"
+        >
+          <option selected value="media1">Media 1</option>
+          <option value="media2">Media 2</option>
+          <option value="dash7">-7</option>
+          <option value="madi1">Madi 1</option>
+          <option value="madi2">Madi 2</option>
+        </select>
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="source-port">Source Port</div>
+        <input
+          class="sdpi-item-value"
+          name="source-port"
+          type="number"
+          value="1"
+          placeholder="1"
+          onchange="sendValueToPlugin(Number(event.target.value), 'setSourcePort')"
+        />
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="destination-net">
+          Destination Net
+        </div>
+        <input
+          class="sdpi-item-value"
+          name="destination-net"
+          type="number"
+          value="1"
+          placeholder="1"
+          onchange="sendValueToPlugin(Number(event.target.value), 'setDestinationNet')"
+        />
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="destination-node">
+          Destination Node
+        </div>
+        <input
+          class="sdpi-item-value"
+          name="destination-node"
+          type="number"
+          value="3"
+          placeholder="3"
+          onchange="sendValueToPlugin(Number(event.target.value), 'setDestinationNode')"
+        />
+      </div>
+      <div type="select" class="sdpi-item">
+        <div class="sdpi-item-label">Change Port Type</div>
+        <select
+          class="sdpi-item-value select setDestinationPortTypeSelect"
+          onchange="sendValueToPlugin(String(event.target.value), 'setDestinationPortType')"
+        >
+          <option selected value="media1">Media 1</option>
+          <option value="media2">Media 2</option>
+          <option value="dash7">-7</option>
+          <option value="madi1">Madi 1</option>
+          <option value="madi2">Madi 2</option>
+        </select>
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label" title="destination-port">
+          Destination Port
+        </div>
+        <input
+          class="sdpi-item-value"
+          name="destination-port"
+          type="number"
+          value="1"
+          placeholder="1"
+          onchange="sendValueToPlugin(Number(event.target.value), 'setDestinationPort')"
+        />
+      </div>
+    </div>
+
+    <script>
+      var pluginAction = null,
+        uuid = '';
+      const address = document.querySelector('input[name="rrcs-address"]');
+      const port = document.querySelector('input[name="rrcs-port"]');
+      const sourceNet = document.querySelector('input[name="source-net"]');
+      const sourceNode = document.querySelector('input[name="source-node"]');
+      const sourcePortType = document.querySelector('.setSourcePortTypeSelect');
+      const sourcePort = document.querySelector('input[name="source-port"]');
+      const destinationNet = document.querySelector(
+        'input[name="destination-net"]'
+      );
+      const destinationNode = document.querySelector(
+        'input[name="destination-node"]'
+      );
+      const destinationPortType = document.querySelector(
+        '.setDestinationPortTypeSelect'
+      );
+      const destinationPort = document.querySelector(
+        'input[name="destination-port"]'
+      );
+
+      if ($SD) {
+        $SD.on('connected', function (jsonObj) {
+          uuid = jsonObj['uuid'];
+          if (jsonObj.hasOwnProperty('actionInfo')) {
+            pluginAction = jsonObj.actionInfo['action'];
+            const settings = jsonObj.actionInfo.payload.settings;
+            address.value = settings.address;
+            port.value = settings.port;
+            sourceNet.value = settings.sourceNet;
+            sourceNode.value = settings.sourceNode;
+            sourcePortType.value = settings.sourcePortType;
+            sourcePort.value = settings.sourcePort;
+            destinationNet.value = settings.destinationNet;
+            destinationNode.value = settings.destinationNode;
+            destinationPortType.value = settings.destinationPortType;
+            destinationPort.value = settings.destinationPort;
+          }
+        });
+      }
+
+      function sendValueToPlugin(value, param) {
+        if ($SD && $SD.connection) {
+          var payload = {};
+          if (param) {
+            payload[param] = value;
+          }
+          $SD.api.sendToPlugin(uuid, pluginAction, payload);
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>de.lucas-kirsche.rrcssd</title>
+    <meta charset="utf-8" />
+  </head>
+
+  <body>
+    <script src="includes/rrcs/bundle.js"></script>
+    <script>
+      var websocket = null;
+      var pluginUUID = null;
+      var settingsCache = {};
+
+      var DestinationEnum = Object.freeze({
+        HARDWARE_AND_SOFTWARE: 0,
+        HARDWARE_ONLY: 1,
+        SOFTWARE_ONLY: 2
+      });
+
+      function createPortWithType(type, address) {
+        switch (type) {
+          case 'media1':
+            return RRCS.RRCSPort.CreateMedia1(address);
+          case 'media2':
+            return RRCS.RRCSPort.CreateMedia2(address);
+          case 'dash7':
+            return RRCS.RRCSPort.CreateDash7(address);
+          case 'madi1':
+            return RRCS.RRCSPort.CreateMadi1(address);
+          case 'madi2':
+            return RRCS.RRCSPort.CreateMadi2(address);
+
+          default:
+            return RRCS.RRCSPort.Create(address);
+        }
+      }
+
+      const transKeyGen = RRCS.RRCSTransKey.Create('N');
+
+      var setCrosspoint = {
+        type: 'de.lucas-kirsche.rrcssd.action',
+
+        onKeyDown: function (context, settings, coordinates, userDesiredState) {
+          const XP = settings;
+          const SOURCE = settingsCache[context].SOURCE;
+          const DESTINATION = settingsCache[context].DESTINATION;
+
+          const client = new RRCS.XMLRPCClient({
+            host: XP.address,
+            port: XP.port,
+            path: '/'
+          });
+
+          const setXp = RRCS.Method.SetXp(SOURCE, DESTINATION);
+
+          RRCS.RRCSRequest(client, transKeyGen, setXp)
+            .then((value) => {
+              const imageName = 'actionDefaultImage_green';
+
+              loadImageAsDataUri(`${imageName}.png`, function (imgUrl) {
+                var json = {
+                  event: 'setImage',
+                  context: context,
+                  payload: {
+                    image: imgUrl || '',
+                    target: DestinationEnum.HARDWARE_AND_SOFTWARE
+                  }
+                };
+                websocket.send(JSON.stringify(json));
+              });
+            })
+            .catch((reason) => {
+              const imageName = 'actionDefaultImage_red';
+
+              loadImageAsDataUri(`${imageName}.png`, function (imgUrl) {
+                var json = {
+                  event: 'setImage',
+                  context: context,
+                  payload: {
+                    image: imgUrl || '',
+                    target: DestinationEnum.HARDWARE_AND_SOFTWARE
+                  }
+                };
+                websocket.send(JSON.stringify(json));
+              });
+            });
+        },
+
+        onKeyUp: function (context, settings, coordinates, userDesiredState) {
+          const XP = settings;
+          const SOURCE = settingsCache[context].SOURCE;
+          const DESTINATION = settingsCache[context].DESTINATION;
+
+          const client = new RRCS.XMLRPCClient({
+            host: XP.address,
+            port: XP.port,
+            path: '/'
+          });
+
+          const killXp = RRCS.Method.KillXp(SOURCE, DESTINATION);
+
+          RRCS.RRCSRequest(client, transKeyGen, killXp)
+            .then((value) => {
+              const imageName = 'actionDefaultImage';
+
+              loadImageAsDataUri(`${imageName}.png`, function (imgUrl) {
+                var json = {
+                  event: 'setImage',
+                  context: context,
+                  payload: {
+                    image: imgUrl || '',
+                    target: DestinationEnum.HARDWARE_AND_SOFTWARE
+                  }
+                };
+                websocket.send(JSON.stringify(json));
+              });
+            })
+            .catch((reason) => {
+              const imageName = 'actionDefaultImage_red';
+
+              loadImageAsDataUri(`${imageName}.png`, function (imgUrl) {
+                var json = {
+                  event: 'setImage',
+                  context: context,
+                  payload: {
+                    image: imgUrl || '',
+                    target: DestinationEnum.HARDWARE_AND_SOFTWARE
+                  }
+                };
+                websocket.send(JSON.stringify(json));
+              });
+            });
+        },
+
+        onWillAppear: function (context, settings, coordinates) {
+          let XP = {
+            address: '127.0.0.1',
+            port: 8193,
+            sourceNet: 1,
+            sourceNode: 3,
+            sourcePortType: 'media1',
+            sourcePort: 1,
+            destinationNet: 1,
+            destinationNode: 3,
+            destinationPortType: 'media1',
+            destinationPort: 2
+          };
+          if (settings != null && settings.hasOwnProperty('address')) {
+            XP = settings;
+          }
+          settingsCache[context] = {
+            XP: XP,
+            SOURCE: new RRCS.Port(
+              RRCS.RRCSNet.Create(XP.sourceNet),
+              RRCS.RRCSNode.Create(XP.sourceNode),
+              createPortWithType(XP.sourcePortType, XP.sourcePort)
+            ),
+            DESTINATION: new RRCS.Port(
+              RRCS.RRCSNet.Create(XP.destinationNet),
+              RRCS.RRCSNode.Create(XP.destinationNode),
+              createPortWithType(XP.destinationPortType, XP.destinationPort)
+            )
+          };
+          this.SetSettings(context, XP);
+        },
+
+        GetPortLabel: function (context, settings) {
+          const XP = settings;
+          const DESTINATION = settingsCache[context].DESTINATION;
+
+          const client = new RRCS.XMLRPCClient({
+            host: XP.address,
+            port: XP.port,
+            path: '/'
+          });
+
+          const getPortAlias = RRCS.Method.GetPortAlias(DESTINATION);
+
+          RRCS.RRCSRequest(client, transKeyGen, getPortAlias)
+            .then((portAlias) => {
+              this.SetTitle(context, portAlias);
+            })
+            .catch((reason) => {
+              this.SetTitle(context, 'ERROR');
+            });
+        },
+
+        SetTitle: function (context, remoteLabel) {
+          var json = {
+            event: 'setTitle',
+            context: context,
+            payload: {
+              title: remoteLabel,
+              target: DestinationEnum.HARDWARE_AND_SOFTWARE
+            }
+          };
+
+          websocket.send(JSON.stringify(json));
+        },
+
+        SetSettings: function (context, settings) {
+          var json = {
+            event: 'setSettings',
+            context: context,
+            payload: settings
+          };
+
+          websocket.send(JSON.stringify(json));
+          this.GetPortLabel(context, settings);
+        },
+
+        UpdateSettings: function (context, key, value) {
+          settingsCache[context].XP[key] = value;
+          switch (key) {
+            case 'sourceNet':
+              settingsCache[context].SOURCE.net = RRCS.RRCSNet.Create(value);
+              break;
+            case 'sourceNode':
+              settingsCache[context].SOURCE.node = RRCS.RRCSNode.Create(value);
+              break;
+            case 'sourcePortType':
+              settingsCache[context].SOURCE.port = createPortWithType(
+                value,
+                settingsCache[context].XP.sourcePort
+              );
+              break;
+            case 'sourcePort':
+              settingsCache[context].SOURCE.port = createPortWithType(
+                settingsCache[context].XP.sourcePortType,
+                value
+              );
+              break;
+            case 'destinationNet':
+              settingsCache[context].DESTINATION.net =
+                RRCS.RRCSNet.Create(value);
+              break;
+            case 'destinationNode':
+              settingsCache[context].DESTINATION.node =
+                RRCS.RRCSNode.Create(value);
+              break;
+            case 'destinationPortType':
+              settingsCache[context].DESTINATION.port = createPortWithType(
+                value,
+                settingsCache[context].XP.destinationPort
+              );
+              break;
+            case 'destinationPort':
+              settingsCache[context].DESTINATION.port = createPortWithType(
+                settingsCache[context].XP.destinationPortType,
+                value
+              );
+            default:
+              break;
+          }
+          return settingsCache[context].XP;
+        }
+      };
+
+      function connectElgatoStreamDeckSocket(
+        inPort,
+        inPluginUUID,
+        inRegisterEvent,
+        inInfo
+      ) {
+        pluginUUID = inPluginUUID;
+
+        // Open the web socket
+        websocket = new WebSocket('ws://127.0.0.1:' + inPort);
+
+        function registerPlugin(inPluginUUID) {
+          var json = {
+            event: inRegisterEvent,
+            uuid: inPluginUUID
+          };
+
+          websocket.send(JSON.stringify(json));
+        }
+
+        websocket.onopen = function () {
+          // WebSocket is connected, send message
+          registerPlugin(pluginUUID);
+        };
+
+        websocket.onmessage = function (evt) {
+          // Received message from Stream Deck
+          var jsonObj = JSON.parse(evt.data);
+          var event = jsonObj['event'];
+          var action = jsonObj['action'];
+          var context = jsonObj['context'];
+          var jsonPayload = jsonObj['payload'] || {};
+          let updatedSettings = null;
+          console.log(jsonObj);
+
+          if (event == 'keyDown') {
+            var settings = jsonPayload['settings'];
+            var coordinates = jsonPayload['coordinates'];
+            var userDesiredState = jsonPayload['userDesiredState'];
+            setCrosspoint.onKeyDown(
+              context,
+              settings,
+              coordinates,
+              userDesiredState
+            );
+          } else if (event == 'keyUp') {
+            var settings = jsonPayload['settings'];
+            var coordinates = jsonPayload['coordinates'];
+            var userDesiredState = jsonPayload['userDesiredState'];
+            setCrosspoint.onKeyUp(
+              context,
+              settings,
+              coordinates,
+              userDesiredState
+            );
+          } else if (event == 'willAppear') {
+            var settings = jsonPayload['settings'];
+            var coordinates = jsonPayload['coordinates'];
+            setCrosspoint.onWillAppear(context, settings, coordinates);
+          } else if (event == 'sendToPlugin') {
+            if (jsonPayload.hasOwnProperty('setAddress')) {
+              var newValue = jsonPayload.setAddress;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'address',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setPort')) {
+              var newValue = jsonPayload.setPort;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'port',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setSourceNet')) {
+              var newValue = jsonPayload.setSourceNet;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'sourceNet',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setSourceNode')) {
+              var newValue = jsonPayload.setSourceNode;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'sourceNode',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setSourcePortType')) {
+              var newValue = jsonPayload.setSourcePortType;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'sourcePortType',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setSourcePort')) {
+              var newValue = jsonPayload.setSourcePort;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'sourcePort',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setDestinationNet')) {
+              var newValue = jsonPayload.setDestinationNet;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'destinationNet',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setDestinationNode')) {
+              var newValue = jsonPayload.setDestinationNode;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'destinationNode',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setDestinationPortType')) {
+              var newValue = jsonPayload.setDestinationPortType;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'destinationPortType',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+            if (jsonPayload.hasOwnProperty('setDestinationPort')) {
+              var newValue = jsonPayload.setDestinationPort;
+              updatedSettings = setCrosspoint.UpdateSettings(
+                context,
+                'destinationPort',
+                newValue
+              );
+              setCrosspoint.SetSettings(context, updatedSettings);
+            }
+          }
+        };
+
+        websocket.onclose = function () {
+          // Websocket is closed
+        };
+      }
+      function loadImageAsDataUri(url, callback) {
+        var image = new Image();
+
+        image.onload = function () {
+          var canvas = document.createElement('canvas');
+
+          canvas.width = this.naturalWidth;
+          canvas.height = this.naturalHeight;
+
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(this, 0, 0);
+          callback(canvas.toDataURL('image/png'));
+        };
+
+        image.src = url;
+      }
+    </script>
+  </body>
+</html>
