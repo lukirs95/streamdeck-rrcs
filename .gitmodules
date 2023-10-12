@@ -1,0 +1,3 @@
+[submodule "Sources/de.lucas-kirsche.rrcssd.sdPlugin/includes/rrcs"]
+	path = Sources/de.lucas-kirsche.rrcssd.sdPlugin/includes/rrcs
+	url = https://github.com/lukirs95/rrcs.git
